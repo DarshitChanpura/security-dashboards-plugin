@@ -4,6 +4,7 @@ on:
   pull_request:
     # Every-time a branch is deprecated it should be added here
     branches:
+      - 'main'
       - '1.0'
       - '1.1'
       - '1.2'
