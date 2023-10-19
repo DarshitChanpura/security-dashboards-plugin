@@ -72,7 +72,7 @@ jobs:
           plugin_name: security-dashboards-plugin
 
       - name: Start Dashboards in background
-        run: node scripts/build_opensearch_dashboards_platform_plugins.js
+        run: node scripts/build_opensearch_dashboards_platform_plugins.js -E cluster.routing.allocation.disk.threshold_enabled=false
         working-directory: ${{ steps.install-dashboards.outputs.dashboards-directory }}
 
       - name: Run integration tests on Linux
