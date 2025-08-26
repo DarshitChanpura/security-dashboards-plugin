@@ -1,0 +1,280 @@
+diff --git a/common/index.ts b/common/index.ts
+index b33c099..84abfd2 100644
+--- a/common/index.ts
++++ b/common/index.ts
+@@ -65,6 +65,8 @@ export const ESTIMATED_IRON_COOKIE_OVERHEAD = 1.5;
+ 
+ export const LOCAL_CLUSTER_ID = '';
+ 
++export const MAX_CHARS_GENERAL_STRING_FIELDS = 254; // RFC 5321
++
+ export enum AuthType {
+   BASIC = 'basicauth',
+   OPEN_ID = 'openid',
+diff --git a/public/apps/configuration/constants.tsx b/public/apps/configuration/constants.tsx
+index a1a79cb..0deef7d 100644
+--- a/public/apps/configuration/constants.tsx
++++ b/public/apps/configuration/constants.tsx
+@@ -432,3 +432,7 @@ export const MIN_NUMBER_OF_CHARS_IN_RESOURCE_NAME = 2;
+ export const MAX_NUMBER_OF_CHARS_IN_RESOURCE_NAME = 50;
+ 
+ export const LIMIT_WIDTH_INPUT_CLASS = 'limit-width-input';
++
++export const MAX_CHARS_GENERAL_STRING_FIELDS = 254; // RFC 5321
++
++
+diff --git a/public/apps/configuration/panels/internal-user-edit/backend-role-panel.tsx b/public/apps/configuration/panels/internal-user-edit/backend-role-panel.tsx
+index 2176b72..cfbef55 100644
+--- a/public/apps/configuration/panels/internal-user-edit/backend-role-panel.tsx
++++ b/public/apps/configuration/panels/internal-user-edit/backend-role-panel.tsx
+@@ -20,6 +20,7 @@ import {
+   EuiFlexItem,
+   EuiSpacer,
+   EuiCompressedFormRow,
++  EuiTextColor,
+ } from '@elastic/eui';
+ import { isEmpty } from 'lodash';
+ import React, { Dispatch, Fragment, SetStateAction, useState } from 'react';
+@@ -29,7 +30,8 @@ import {
+   updateElementInArrayHandler,
+ } from '../../utils/array-state-utils';
+ import { PanelWithHeader } from '../../utils/panel-with-header';
+-import { DocLinks, LIMIT_WIDTH_INPUT_CLASS } from '../../constants';
++import { DocLinks, LIMIT_WIDTH_INPUT_CLASS, MAX_CHARS_GENERAL_STRING_FIELDS } from '../../constants';
++import { i18n } from '@osd/i18n';
+ 
+ function generateBackendRolesPanels(
+   backendRoles: string[],
+@@ -39,17 +41,31 @@ function generateBackendRolesPanels(
+   setRoleEmptyErrorMessage: Dispatch<SetStateAction<string>>
+ ) {
+   const panels = backendRoles.map((backendRole, arrayIndex) => {
++    const leftCharacters = MAX_CHARS_GENERAL_STRING_FIELDS - (backendRole.length);
++    const charactersOverflow = leftCharacters < 0;
+     return (
+       <Fragment key={`backend-role-${arrayIndex}`}>
+         <EuiFlexGroup>
+           <EuiFlexItem className={LIMIT_WIDTH_INPUT_CLASS}>
+             <EuiCompressedFormRow
+-              label={arrayIndex === 0 ? 'Backend role' : ''}
+-              error={roleEmptyErrorMessage}
+-              isInvalid={arrayIndex === emptyRoleIndex && !isEmpty(roleEmptyErrorMessage)}
+-            >
++                label={arrayIndex === 0 ? 'Backend role' : ''}
++                error={roleEmptyErrorMessage}
++                isInvalid={(arrayIndex === emptyRoleIndex && !isEmpty(roleEmptyErrorMessage)) || charactersOverflow}
++                helpText={
++                  <>
++                    <EuiTextColor color={charactersOverflow ? 'danger' : 'subdued'}>
++                      {i18n.translate('security.rolesMapping.backendRoles.charactersLeft', {
++                        defaultMessage: '{leftCharacters} characters left.',
++                        values: {
++                          leftCharacters,
++                        },
++                      })}
++                    </EuiTextColor>
++                  </>
++                }
++              >
+               <EuiCompressedFieldText
+-                isInvalid={arrayIndex === emptyRoleIndex && !isEmpty(roleEmptyErrorMessage)}
++                isInvalid={(arrayIndex === emptyRoleIndex && !isEmpty(roleEmptyErrorMessage)) || (backendRole.length > MAX_CHARS_GENERAL_STRING_FIELDS)}
+                 id={`backend-role-${arrayIndex}`}
+                 value={backendRole}
+                 onChange={(e) => {
+diff --git a/public/apps/configuration/panels/role-list.tsx b/public/apps/configuration/panels/role-list.tsx
+index 11e4cbf..f6d78fb 100644
+--- a/public/apps/configuration/panels/role-list.tsx
++++ b/public/apps/configuration/panels/role-list.tsx
+@@ -91,11 +91,6 @@ const columns: Array<EuiBasicTableColumn<RoleListing>> = [
+     name: 'Backend roles',
+     render: truncatedListView(tableItemsUIProps),
+   },
+-  {
+-    field: 'tenantPermissions',
+-    name: 'Tenants',
+-    render: truncatedListView(tableItemsUIProps),
+-  },
+   {
+     field: 'reserved',
+     name: 'Customization',
+@@ -235,13 +230,6 @@ export function RoleList(props: AppDependencies) {
+           multiSelect: 'or',
+           options: buildSearchFilterOptions(roleData, 'backendRoles'),
+         },
+-        {
+-          type: 'field_value_selection',
+-          field: 'tenantPermissions',
+-          name: 'Tenants',
+-          multiSelect: 'or',
+-          options: buildSearchFilterOptions(roleData, 'tenantPermissions'),
+-        },
+         {
+           type: 'field_value_selection',
+           field: 'reserved',
+@@ -283,7 +271,7 @@ export function RoleList(props: AppDependencies) {
+           Roles are the core way of controlling access to your cluster. Roles contain any
+           combination of cluster-wide permission, index-
+           <br />
+-          specific permissions, document- and field-level security, and tenants. Then you map users
++          specific permissions, document- and field-level security. Then you map users
+           to these roles so that users <br />
+           gain those permissions. <ExternalLink href={DocLinks.UsersAndRolesDoc} />
+         </EuiText>
+@@ -334,7 +322,7 @@ export function RoleList(props: AppDependencies) {
+                 <EuiText size="xs" color="subdued">
+                   Roles are the core way of controlling access to your cluster. Roles contain any
+                   combination of cluster-wide permission, index-specific permissions, document- and
+-                  field-level security, and tenants. Then you map users to these roles so that users
++                  field-level security. Then you map users to these roles so that users
+                   gain those permissions. <ExternalLink href={DocLinks.UsersAndRolesDoc} />
+                 </EuiText>
+               </EuiPageContentHeaderSection>
+diff --git a/public/apps/configuration/panels/role-mapping/external-identities-panel.tsx b/public/apps/configuration/panels/role-mapping/external-identities-panel.tsx
+index 73ccd43..d1c9763 100644
+--- a/public/apps/configuration/panels/role-mapping/external-identities-panel.tsx
++++ b/public/apps/configuration/panels/role-mapping/external-identities-panel.tsx
+@@ -21,6 +21,7 @@ import {
+   EuiSmallButton,
+   EuiCompressedFormRow,
+   EuiSpacer,
++  EuiTextColor,
+ } from '@elastic/eui';
+ import { isEmpty, map } from 'lodash';
+ import { PanelWithHeader } from '../../utils/panel-with-header';
+@@ -31,7 +32,8 @@ import {
+   updateElementInArrayHandler,
+ } from '../../utils/array-state-utils';
+ import { ExternalIdentityStateClass } from './types';
+-import { DocLinks } from '../../constants';
++import { DocLinks, MAX_CHARS_GENERAL_STRING_FIELDS } from '../../constants';
++import { i18n } from '@osd/i18n';
+ 
+ export function unbuildExternalIdentityState(
+   externalIdentities: ExternalIdentityStateClass[]
+@@ -67,18 +69,35 @@ export function ExternalIdentitiesPanel(props: {
+     const onValueChangeHandler = (externalIdentityToUpdate: string) =>
+       updateElementInArrayHandler(setExternalIdentities, [arrayIndex, externalIdentityToUpdate]);
+ 
++    const leftCharacters = MAX_CHARS_GENERAL_STRING_FIELDS - (externalIdentity.externalIdentity.length);
++    const charactersOverflow = leftCharacters < 0;
+     return (
+       <Fragment key={`externalIdentity-${arrayIndex}`}>
+         <EuiFlexGroup>
+           <EuiFlexItem style={{ maxWidth: '400px' }}>
+-            <FormRow headerText={arrayIndex === 0 ? 'Backend roles' : ''}>
++            <EuiCompressedFormRow
++                label={arrayIndex === 0 ? 'Backend roles' : ''}
++                helpText={
++                  <>
++                    <EuiTextColor color={charactersOverflow ? 'danger' : 'subdued'}>
++                      {i18n.translate('security.rolesMapping.backendRoles.charactersLeft', {
++                        defaultMessage: '{leftCharacters} characters left.',
++                        values: {
++                          leftCharacters,
++                        },
++                      })}
++                    </EuiTextColor>
++                  </>
++                }
++                isInvalid={charactersOverflow}
++              >
+               <EuiCompressedFieldText
+                 id={`externalIdentity-${arrayIndex}`}
+                 value={externalIdentity.externalIdentity}
+                 onChange={(e) => onValueChangeHandler('externalIdentity')(e.target.value)}
+                 placeholder="Type in backend role"
+               />
+-            </FormRow>
++            </EuiCompressedFormRow>
+           </EuiFlexItem>
+           <EuiFlexItem grow={false}>
+             <EuiCompressedFormRow hasEmptyLabelSpace={arrayIndex === 0 ? true : false}>
+diff --git a/public/apps/configuration/panels/role-mapping/role-edit-mapped-user.tsx b/public/apps/configuration/panels/role-mapping/role-edit-mapped-user.tsx
+index 1c77265..687a1c8 100644
+--- a/public/apps/configuration/panels/role-mapping/role-edit-mapped-user.tsx
++++ b/public/apps/configuration/panels/role-mapping/role-edit-mapped-user.tsx
+@@ -46,6 +46,7 @@ import { SecurityPluginTopNavMenu } from '../../top-nav-menu';
+ import { DataSourceContext } from '../../app-router';
+ import { getClusterInfo } from '../../../../utils/datasource-utils';
+ import { PageHeader } from '../../header/header-components';
++import { constructErrorMessageAndLog } from '../../../error-utils';
+ 
+ interface RoleEditMappedUserProps extends BreadcrumbsPageDependencies {
+   roleName: string;
+@@ -147,7 +148,7 @@ export function RoleEditMappedUser(props: RoleEditMappedUserProps) {
+       );
+     } catch (e) {
+       if (e.message) {
+-        addToast(createErrorToast('saveRoleMappingFailed', 'save error', e.message));
++        addToast(createErrorToast('saveRoleMappingFailed', 'save error', constructErrorMessageAndLog(e, '')));
+       } else {
+         addToast(createUnknownErrorToast('saveRoleMappingFailed', 'save ' + props.roleName));
+         console.error(e);
+diff --git a/public/apps/configuration/panels/role-mapping/users-panel.tsx b/public/apps/configuration/panels/role-mapping/users-panel.tsx
+index 19e1fb1..5c52162 100644
+--- a/public/apps/configuration/panels/role-mapping/users-panel.tsx
++++ b/public/apps/configuration/panels/role-mapping/users-panel.tsx
+@@ -22,7 +22,7 @@ import { buildHashUrl } from '../../utils/url-builder';
+ import { Action } from '../../types';
+ import { ResourceType } from '../../../../../common';
+ import { ExternalLinkButton } from '../../utils/display-utils';
+-import { DocLinks } from '../../constants';
++import { DocLinks, MAX_CHARS_GENERAL_STRING_FIELDS } from '../../constants';
+ import { appendOptionToComboBoxHandler } from '../../utils/combo-box-utils';
+ 
+ export function InternalUsersPanel(props: {
+@@ -43,7 +43,7 @@ export function InternalUsersPanel(props: {
+       <EuiForm>
+         <FormRow
+           headerText="Users"
+-          helpText="Look up by user name. You can also create new internal user or enter external user."
++          helpText={"Look up by user name. You can also create new internal user or enter external user. External user name should not exceed " + MAX_CHARS_GENERAL_STRING_FIELDS + " chars."}
+         >
+           <EuiFlexGroup>
+             <EuiFlexItem style={{ maxWidth: '400px' }}>
+@@ -51,7 +51,9 @@ export function InternalUsersPanel(props: {
+                 options={optionUniverse}
+                 selectedOptions={state}
+                 onChange={setState}
+-                onCreateOption={appendOptionToComboBoxHandler(setState, [])}
++                onCreateOption={(e) => {
++                  e.length <= MAX_CHARS_GENERAL_STRING_FIELDS && appendOptionToComboBoxHandler(setState, [], e);
++                }}
+               />
+             </EuiFlexItem>
+             <EuiFlexItem grow={false}>
+diff --git a/server/routes/index.ts b/server/routes/index.ts
+index fcb0704..35d1cd7 100644
+--- a/server/routes/index.ts
++++ b/server/routes/index.ts
+@@ -22,14 +22,14 @@ import {
+   RequestHandlerContext,
+   OpenSearchDashboardsRequest,
+ } from 'opensearch-dashboards/server';
+-import { API_PREFIX, CONFIGURATION_API_PREFIX, isValidResourceName } from '../../common';
++import { API_PREFIX, CONFIGURATION_API_PREFIX, isValidResourceName, MAX_CHARS_GENERAL_STRING_FIELDS } from '../../common';
+ 
+ // TODO: consider to extract entity CRUD operations and put it into a client class
+ export function defineRoutes(router: IRouter, dataSourceEnabled: boolean) {
+   const internalUserSchema = schema.object({
+     description: schema.maybe(schema.string()),
+     password: schema.maybe(schema.string()),
+-    backend_roles: schema.arrayOf(schema.string(), { defaultValue: [] }),
++    backend_roles: schema.arrayOf(schema.string({maxLength: MAX_CHARS_GENERAL_STRING_FIELDS}), { defaultValue: [] }),
+     attributes: schema.any({ defaultValue: {} }),
+   });
+ 
+@@ -46,9 +46,9 @@ export function defineRoutes(router: IRouter, dataSourceEnabled: boolean) {
+ 
+   const roleMappingSchema = schema.object({
+     description: schema.maybe(schema.string()),
+-    backend_roles: schema.arrayOf(schema.string(), { defaultValue: [] }),
+-    hosts: schema.arrayOf(schema.string(), { defaultValue: [] }),
+-    users: schema.arrayOf(schema.string(), { defaultValue: [] }),
++    backend_roles: schema.arrayOf(schema.string({maxLength: MAX_CHARS_GENERAL_STRING_FIELDS}), { defaultValue: [] }),
++    hosts: schema.arrayOf(schema.string({maxLength: MAX_CHARS_GENERAL_STRING_FIELDS}), { defaultValue: [] }),
++    users: schema.arrayOf(schema.string({maxLength: MAX_CHARS_GENERAL_STRING_FIELDS}), { defaultValue: [] }),
+   });
+ 
+   const roleSchema = schema.object({
