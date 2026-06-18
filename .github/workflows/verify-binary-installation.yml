@@ -65,41 +65,23 @@ jobs:
           EOT
 
 
-      - name: Setup and build plugin
+      - name: Run Dashboard with Security Dashboards Plugin
         id: setup-dashboards
         uses: opensearch-project/opensearch-build/.github/actions/setup-opensearch-dashboards@72a7a8a167ed06d83ba65b4d9f60acd08232cd56
         with:
           plugin_name: security-dashboards-plugin
-
-      - name: Build plugin zip
-        run: yarn build
-        working-directory: ${{ steps.setup-dashboards.outputs.plugin-directory }}
-
-      - name: Download OpenSearch Dashboards binary
-        run: |
-          OSD_VERSION=$(jq -r '.opensearchDashboards.version' package.json)
-          curl -L -o opensearch-dashboards.tar.gz "https://ci.opensearch.org/ci/dbc/snapshots/core/opensearch-dashboards/${OSD_VERSION}-SNAPSHOT/opensearch-dashboards-min-${OSD_VERSION}-SNAPSHOT-linux-x64-latest.tar.gz"
-          tar -xzf opensearch-dashboards.tar.gz
-          rm opensearch-dashboards.tar.gz
-          echo "DASHBOARDS_DIR=$(ls -d opensearch-dashboards-*)" >> $GITHUB_ENV
-        working-directory: ${{ steps.setup-dashboards.outputs.plugin-directory }}
+          built_plugin_name: security-dashboards
+          install_zip: true
+          snapshot: 'false'
+          opensearch_dashboards_yml: opensearch-dashboards-config.yml
+          
+      - name: Start the binary
+        run: | 
+          nohup ./bin/opensearch-dashboards &
+        working-directory: ${{ steps.setup-dashboards.outputs.dashboards-binary-directory }}
         shell: bash
 
-      - name: Install plugin into binary
-        run: |
-          PLUGIN_ZIP=$(ls ${{ steps.setup-dashboards.outputs.plugin-directory }}/build/security-dashboards-*.zip)
-          ./${DASHBOARDS_DIR}/bin/opensearch-dashboards-plugin install "file:${PLUGIN_ZIP}"
-        working-directory: ${{ steps.setup-dashboards.outputs.plugin-directory }}
-        shell: bash
-
-      - name: Configure and start OpenSearch Dashboards
-        run: |
-          cp ${{ github.workspace }}/opensearch-dashboards-config.yml ./${DASHBOARDS_DIR}/config/opensearch_dashboards.yml
-          nohup ./${DASHBOARDS_DIR}/bin/opensearch-dashboards &
-        working-directory: ${{ steps.setup-dashboards.outputs.plugin-directory }}
-        shell: bash
-
-      - name: Health check
+      - name: Health check 
         run: |
           timeout 300 bash -c 'while [[ "$(curl -u admin:${{ env.OPENSEARCH_INITIAL_ADMIN_PASSWORD }} -k http://localhost:5601/api/status | jq -r '.status.overall.state')" != "green" ]]; do sleep 5; done'
         shell: bash
