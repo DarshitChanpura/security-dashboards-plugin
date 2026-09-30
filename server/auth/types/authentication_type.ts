@@ -26,6 +26,9 @@ import {
   IOpenSearchDashboardsResponse,
   AuthResult,
 } from 'opensearch-dashboards/server';
+// Not re-exported from the public server barrel, so imported from core utils directly (the same convention the
+// in-tree workspace plugin uses). getWorkspaceState reads the workspace id core parsed from the /w/<id> URL.
+import { getWorkspaceState } from '../../../../../src/core/server/utils';
 import { SecurityPluginConfigType } from '../..';
 import { SecuritySessionCookie } from '../../session/security_cookie';
 import { SecurityClient } from '../../backend/opensearch_security_client';
@@ -209,6 +212,14 @@ export abstract class AuthenticationType implements IAuthenticationType {
         throw error;
       }
     }
+    // Forward the active workspace to the backend, mirroring the securitytenant header above. The workspace id is
+    // server-derived - core parsed it from the /w/<id> URL at onPreRouting and stripped it before auth - so it is
+    // trusted. The backend intersects it with the user's workspace membership: it narrows visibility, never grants.
+    const { requestWorkspaceId } = getWorkspaceState(request);
+    if (requestWorkspaceId) {
+      Object.assign(authHeaders, { currentworkspace: requestWorkspaceId });
+    }
+
     if (!authInfo) {
       authInfo = await this.securityClient.authinfo(request, authHeaders);
     }
