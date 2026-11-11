@@ -1,4 +1,5 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
  *   Copyright OpenSearch Contributors
  *
  *   Licensed under the Apache License, Version 2.0 (the "License").
@@ -272,6 +273,29 @@ describe('Role list', () => {
       expect(mockRoleListUtils.requestDeleteRoles).toHaveBeenCalled();
       done();
     });
+  });
+
+  it('removes a deleted role by name when the selection holds a copy of the row', async () => {
+    const role = (roleName: string) => ({ roleName });
+    const setRoleData = jest.fn();
+    // the spy sees only React.useState: role data, error flag, then selection
+    (React.useState as jest.Mock)
+      .mockImplementationOnce(() => [[role('role_1'), role('role_2')], setRoleData])
+      .mockImplementationOnce(() => [false, setState])
+      .mockImplementationOnce(() => [[role('role_1')], setState]);
+    shallow(
+      <RoleList
+        coreStart={mockCoreStart as any}
+        depsStart={{ navigation: {} }}
+        params={{} as any}
+        config={{} as any}
+      />
+    );
+    const deleteFunc = useDeleteConfirmState.mock.calls.slice(-1)[0][0];
+
+    await deleteFunc();
+
+    expect(setRoleData).toHaveBeenCalledWith([role('role_2')]);
   });
 
   it('error occurred while deleting the role', () => {

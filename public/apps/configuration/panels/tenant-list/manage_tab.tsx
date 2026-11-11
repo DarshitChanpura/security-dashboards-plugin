@@ -1,4 +1,5 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
  *   Copyright OpenSearch Contributors
  *
  *   Licensed under the Apache License, Version 2.0 (the "License").
@@ -37,7 +38,7 @@ import {
   EuiLoadingContent,
 } from '@elastic/eui';
 import React, { ReactNode, useState, useCallback } from 'react';
-import { difference } from 'lodash';
+import { differenceBy } from 'lodash';
 import { HashRouter as Router, Route } from 'react-router-dom';
 import { flow } from 'lodash';
 import { getCurrentUser } from '../../../../utils/auth-info-utils';
@@ -136,7 +137,7 @@ export function ManageTab(props: AppDependencies) {
     const tenantsToDelete: string[] = selection.map((r) => r.tenant);
     try {
       await requestDeleteTenant(props.coreStart.http, tenantsToDelete);
-      setTenantData(difference(tenantData, selection));
+      setTenantData(differenceBy(tenantData, selection, 'tenant'));
       setSelection([]);
     } catch (e) {
       console.log(e);
